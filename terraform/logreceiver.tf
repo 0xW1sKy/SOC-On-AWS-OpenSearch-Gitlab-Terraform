@@ -363,6 +363,27 @@ data "aws_iam_policy_document" "s3_bucket_policy" {
       "${aws_s3_bucket.bucket.arn}/*"
     ]
   }
+  statement {
+    sid = "FirehoseDeliveryStreamWrite For S3"
+    principals {
+      type        = "Service"
+      identifiers = ["firehose.amazonaws.com"]
+    }
+    actions = [
+      "s3:PutObject",
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values = [
+        "bucket-owner-full-control"
+      ]
+    }
+    effect = "Allow"
+    resources = [
+      "${aws_s3_bucket.bucket.arn}/*",
+    ]
+  }
 }
 
 resource "aws_s3_bucket_policy" "beacon" {
