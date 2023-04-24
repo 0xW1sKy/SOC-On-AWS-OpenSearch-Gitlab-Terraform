@@ -1,4 +1,6 @@
 <!-- markdownlint-disable-file MD026 MD033 MD007 MD004 -->
+[Original Inspiration](https://github.com/aws-samples/siem-on-amazon-opensearch-service)
+
 ## Design Considerations
 
 This projects is being designed such that it could by copy-pasted to a new environment and everything should 'just work' only changes would be to update environment variables to point at a different Production and Staging account in AWS.
