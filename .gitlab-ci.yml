@@ -1,0 +1,261 @@
+include:
+  - template: Terraform/Base.latest.gitlab-ci.yml # https://gitlab.com/gitlab-org/gitlab/blob/master/lib/gitlab/ci/templates/Terraform/Base.latest.gitlab-ci.yml
+
+default:
+  tags:
+    - saas-linux-large-amd64
+
+stages:
+  - test
+  - prepare
+  - init
+  - validate
+  - build
+  - deploy
+  - destroy
+
+variables:
+  TF_ROOT: ${CI_PROJECT_DIR}/terraform
+  TF_VAR_CI_COMMIT_SHORT_SHA: ${CI_COMMIT_SHORT_SHA}
+  TF_VAR_CI_ENVIRONMENT_NAME: ${CI_ENVIRONMENT_NAME}
+  TF_VAR_ONELOGIN_CLIENT_ID: ${ONELOGIN_CLIENT_ID}
+  TF_VAR_ONELOGIN_CLIENT_SECRET: ${ONELOGIN_CLIENT_SECRET}
+
+
+.download_geoip:
+  script:
+    - wget -nv -O- "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-ASN&license_key=${MAXIND_SECRET}&suffix=tar.gz" | tar zxv
+    - wget -nv -O- "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${MAXIND_SECRET}&suffix=tar.gz" | tar zxv
+    - wget -nv -O- "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country&license_key=${MAXIND_SECRET}&suffix=tar.gz" | tar zxv
+  artifacts:
+    path:
+      - GeoLite*/*.mmdb
+
+
+.lambda_artifacts: &lambda_artifacts
+  artifacts:
+    paths:
+      - ${TF_ROOT}/lambda_layer.zip
+
+Python Lambda Build:
+  stage: prepare
+  image: public.ecr.aws/sam/build-python3.8
+  script:
+    - yum -y install python3-devel
+    - python3 -m ensurepip
+    - /var/lang/bin/python3.8 -m pip install --upgrade pip
+    - |
+      function install_python_requirements(){
+        local REQUIREMENTSPATH=$1
+        local OUTPUTPATH=$2
+        pip install -r "${REQUIREMENTSPATH}/requirements.txt" -t ${REQUIREMENTSPATH}/python/
+        cd $REQUIREMENTSPATH
+        zip -r "${OUTPUTPATH}/lambda_layer.zip" "./"
+      }
+    - install_python_requirements "${CI_PROJECT_DIR}/terraform/siem-lambda/layer/" "${TF_ROOT}"
+  artifacts:
+    paths:
+      - ${TF_ROOT}/lambda_layer.zip
+  rules:
+    - if: $CI_PIPELINE_SOURCE != "merge_request_event"
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+
+
+
+Staging Account Validate:
+  needs: []
+  extends: .terraform:validate
+  environment:
+    name: Staging
+    action: prepare
+  rules:
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+  variables:
+    TF_STATE_NAME: "Staging"
+    TF_CACHE_KEY: "Staging"
+
+Staging Account Build:
+  needs:
+    - job: "Python Lambda Build"
+      artifacts: true
+      optional: false
+  extends: .terraform:build
+  environment:
+    name: Staging
+    action: prepare
+  rules:
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: on_success
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+  variables:
+    TF_STATE_NAME: "Staging"
+    TF_CACHE_KEY: "Staging"
+  artifacts:
+    paths:
+      - ${TF_ROOT}/lambda_layer.zip
+      - ${TF_ROOT}/plan.cache
+    reports:
+      terraform: ${TF_ROOT}/plan.json
+
+
+Staging Account Deploy:
+  needs:
+    - job: "Staging Account Build"
+      artifacts: true
+      optional: false
+    - job: "Python Lambda Build"
+      artifacts: true
+      optional: false
+  extends: .terraform:deploy
+  allow_failure: false
+  environment:
+    name: Staging
+    action: start
+    on_stop: "Staging Account Cleanup"
+  rules:
+    - if: $CI_COMMIT_BRANCH != $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: on_success
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+  variables:
+    TF_STATE_NAME: "Staging"
+    TF_CACHE_KEY: "Staging"
+  artifacts:
+    paths:
+      - ${TF_ROOT}/plan.cache
+
+
+Staging Account Cleanup:
+  extends: .terraform:destroy
+  stage: destroy
+  allow_failure: false
+  environment:
+    name: Staging
+    action: stop
+  variables:
+    TF_STATE_NAME: "Staging"
+    TF_CACHE_KEY: "Staging"
+
+
+
+
+Prod Account Validate:
+  needs: []
+  extends: .terraform:validate
+  environment:
+    name: Production
+    action: prepare
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+  variables:
+    TF_STATE_NAME: "Production"
+    TF_CACHE_KEY: "Production"
+
+Prod Account Build:
+  needs:
+    - job: "Python Lambda Build"
+      artifacts: true
+      optional: false
+  extends: .terraform:build
+  environment:
+    name: Production
+    action: prepare
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: on_success
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+  variables:
+    TF_STATE_NAME: "Production"
+    TF_CACHE_KEY: "Production"
+  artifacts:
+    paths:
+      - ${TF_ROOT}/lambda_layer.zip
+      - ${TF_ROOT}/plan.cache
+    reports:
+      terraform: ${TF_ROOT}/plan.json
+
+Prod Account Deploy:
+  timeout: 3 hours 30 minutes
+  needs:
+    - job: "Prod Account Build"
+      optional: false
+      artifacts: true
+    - job: "Staging Account Deploy"
+      artifacts: false
+      optional: false
+    - job: "Python Lambda Build"
+      artifacts: true
+      optional: false
+  extends: .terraform:deploy
+  allow_failure: false
+  environment:
+    name: Production
+    action: start
+    on_stop: "Prod Account Cleanup"
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: manual
+      changes:
+        - terraform/**
+        - terraform/**/*.*
+        - .gitlab-ci.yml
+  variables:
+    TF_STATE_NAME: "Production"
+    TF_CACHE_KEY: "Production"
+  artifacts:
+    paths:
+      - ${TF_ROOT}/plan.cache
+
+Prod Account Cleanup:
+  extends: .terraform:destroy
+  stage: destroy
+  allow_failure: false
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  environment:
+    name: Production
+    action: stop
+  variables:
+    TF_STATE_NAME: "Production"
+    TF_CACHE_KEY: "Production"

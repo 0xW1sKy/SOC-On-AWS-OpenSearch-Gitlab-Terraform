@@ -1,0 +1,13 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Test StackSet for Delegated ControlTower Testing
+Resources:
+  TestResource:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Description: >-
+        Test Resource Created to validate delegated administration of stacksets
+      Name: /secops/test/parameter
+      Tier: Advanced
+      Type: String
+      Value: "test"

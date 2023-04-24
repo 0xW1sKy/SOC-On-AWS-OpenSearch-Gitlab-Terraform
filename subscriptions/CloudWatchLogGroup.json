@@ -1,0 +1,69 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Create log subscription filter for security_logs",
+    "Parameters": {
+        "LogGroupName": {
+            "Type": "String",
+            "Default": "security_logs",
+            "Description": "Log Group to send to SIEM"
+        },
+        "LogAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID of central logging account"
+        }
+    },
+    "Resources": {
+        "CloudWatchLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Sid": "",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": {
+                                "Fn::Join": [
+                                    "", [
+                                        "logs.",
+                                        { "Ref": "AWS::Region" },
+                                        ".amazonaws.com"
+                                    ]
+                                ]
+                            }
+                        },
+                        "Action": "sts:AssumeRole"
+                    }]
+                }
+            }
+        },
+        "SubscriptionFilter": {
+            "Type": "AWS::Logs::SubscriptionFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "LogGroupName"
+                },
+                "FilterPattern": "",
+                "DestinationArn": {
+                    "Fn::Join": [
+                        "", [
+                            "arn:aws:logs:",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            ":",
+                            { "Ref": "LogAccountId" },
+                            ":destination:",
+                            "AuditStagingDestination",
+                            "-",
+                            {
+                                "Ref": "AWS::Region"
+                            }
+                        ]
+                    ]
+                },
+                "RoleArn": { "Fn::GetAtt": ["CloudWatchLogsRole", "Arn"] }
+            }
+        }
+    }
+}

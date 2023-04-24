@@ -1,0 +1,117 @@
+{
+    "Resources": {
+        "CloudwatchSSMSecurityLogConfig": {
+            "Type": "AWS::SSM::Parameter",
+            "Properties": {
+                "Description": "Security Logging SSM Parameter for CloudWatch Agent",
+                "Name": "/cloudwatch/agent/config/SecurityLogging",
+                "Type": "String",
+                "Value": "{\n    \"logs\": {\n        \"logs_collected\": {\n            \"files\": {\n                \"collect_list\": [\n                    {\n                        \"file_path\": \"c:\\\\inetpub\\\\logs\\\\LogFiles\\\\W3SVC1\\\\**.log\",\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/iis\",\n                        \"timezone\": \"UTC\"\n                    },\n                    {\n                        \"file_path\": \"d:\\\\FTPLogs\\\\**.log\",\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/ftp\",\n                        \"timezone\": \"UTC\"\n                    },\n                    {\n                        \"file_path\": \"c:\\\\Windows\\\\System32\\\\dns\\\\dns*T*Z.log\",\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/dns\",\n                        \"timezone\": \"UTC\"\n                    }\n                ]\n            },\n            \"windows_events\": {\n                \"collect_list\": [\n                    {\n                        \"event_name\": \"Application\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Application\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Security\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Security\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"System\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/System\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Windows Powershell\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Windows Powershell\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Microsoft-Windows-TaskScheduler/Operational\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Microsoft-Windows-TaskScheduler/Operational\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Microsoft-Windows-Application-Experience/Program-Inventory\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Microsoft-Windows-Application-Experience/Program-Inventory\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Microsoft-Windows-CodeIntegrity/Operational\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Microsoft-Windows-CodeIntegrity/Operational\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Setup\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Setup\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Microsoft-Windows-Windows Firewall with Advanced Security/Firewall\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Microsoft-Windows-Windows Firewall with Advanced Security/Firewall\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Microsoft-Windows-WindowsUpdateClient/Operational\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Microsoft-Windows-WindowsUpdateClient/Operational\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Microsoft-Windows-WinRM/Operational\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Microsoft-Windows-WinRM/Operational\",\n                        \"event_format\": \"xml\"\n                    },\n                    {\n                        \"event_name\": \"Microsoft-Windows-PowerShell/Operational\",\n                        \"event_levels\": [\n                            \"INFORMATION\",\n                            \"WARNING\",\n                            \"ERROR\",\n                            \"CRITICAL\"\n                        ],\n                        \"log_group_name\": \"security_logs\",\n                        \"log_stream_name\": \"/{local_hostname}/{ip_address}/Windows/Microsoft-Windows-PowerShell/Operational\",\n                        \"event_format\": \"xml\"\n                    }\n                ]\n            }\n        }\n    }\n}",
+                "Tier": "Advanced"
+            }
+        },
+        "InstallCloudWatchAgentAssociation": {
+            "Type": "AWS::SSM::Association",
+            "Properties": {
+                "AssociationName": "InstallCloudWatchAgent",
+                "Name": "AWS-ConfigureAWSPackage",
+                "Parameters": {
+                    "action": [
+                        "Install"
+                    ],
+                    "installationType": [
+                        "Uninstall and reinstall"
+                    ],
+                    "name": [
+                        "AmazonCloudWatchAgent"
+                    ]
+                },
+                "ScheduleExpression": "rate(7 days)",
+                "Targets": [
+                    {
+                        "Key": "InstanceIds",
+                        "Values": [
+                            "*"
+                        ]
+                    }
+                ]
+            }
+        },
+        "ConfigureCloudWatchAgentAssociation": {
+            "Type": "AWS::SSM::Association",
+            "Properties": {
+                "AssociationName": "ConfigureCloudWatchAgent",
+                "Name": "AmazonCloudWatch-ManageAgent",
+                "Parameters": {
+                    "action": [
+                        "configure (append)"
+                    ],
+                    "mode": [
+                        "ec2"
+                    ],
+                    "optionalConfigurationSource": [
+                        "ssm"
+                    ],
+                    "optionalConfigurationLocation": [
+                        "/cloudwatch/agent/config/SecurityLogging"
+                    ],
+                    "optionalRestart": [
+                        "yes"
+                    ]
+                },
+                "ScheduleExpression": "rate(7 days)",
+                "Targets": [
+                    {
+                        "Key": "InstanceIds",
+                        "Values": [
+                            "*"
+                        ]
+                    }
+                ]
+            }
+        },
+        "SecurityLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": "security_logs",
+                "RetentionInDays": 90
+            }
+        },
+        "SubscriptionFilter": {
+            "Type": "AWS::Logs::SubscriptionFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "SecurityLogGroup"
+                },
+                "FilterPattern": "",
+                "DestinationArn": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "arn:aws:logs:",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            ":",
+                            {"Ref":"LogAccountId"},
+                            ":destination:",
+                            "BeaconDestination",
+                            "-",
+                            {
+                                "Ref": "AWS::Region"
+                            }
+                        ]
+                    ]
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "LogAccountId": {
+            "Type": "String",
+            "Description": "AWS Account ID of central logging account"
+        }
+    },
+    "Metadata": {},
+    "Conditions": {}
+}

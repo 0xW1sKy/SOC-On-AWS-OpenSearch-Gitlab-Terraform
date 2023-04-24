@@ -1,0 +1,45 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Configures A Service Role allowed to read s3 Log Buckets.
+
+Parameters:
+  CompanyName:
+    Type: String
+    MaxLength: 12
+    MinLength: 12
+  AuditAccountId:
+    Type: String
+    Description: AWS Account Id of the administrator account (the account in which StackSets will be created).
+    MaxLength: 12
+    MinLength: 12
+  EnvironmentName:
+    Type: String
+    MaxLength: 12
+    MinLength: 12
+Resources:
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+       - !Sub '${CompanyName}ServiceRoleForS3Logs-${EnvironmentName}'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Ref AuditAccountId
+            Action:
+              - sts:AssumeRole
+      Path: /siem/service/logs/collector/
+      Policies:
+        - PolicyName: s3-log-collection
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action:
+                - s3:getObject
+                - s3:getBucketLocation
+              Resource:
+                - '*'
+
+

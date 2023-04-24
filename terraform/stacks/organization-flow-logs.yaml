@@ -1,0 +1,292 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This stackset goes through and periodically checks the VPC's and enables flow-logs and a properly-named log group to write them to.
+# Version 1.0
+
+Resources:
+  LambdaPermissionsBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Permissions Boundary Policy - Limits permissions on AutoVPCFlow lambda role
+      # Note.ManagedPolicyName: CF CAPABILITY_NAMED_IAM needed
+      Path: /pb/
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          # Note: Permits lambda to pass the flowlogsRole to the VPC Flow Logs service.
+          - Effect: Allow
+            Action:
+              - iam:PassRole
+            Resource:
+              - !GetAtt VPCFlowLogsRole.Arn
+
+          # Note: Permits lambda to enumerate necessary information for it to determine what VPCs need flow logs and associated objects setup.
+          - Effect: Allow
+            Action:
+              - organizations:DescribeOrganization
+              - ec2:DescribeRegions
+              - ec2:DescribeVpcs
+              - ec2:CreateFlowLogs
+              - iam:ListRoles
+              - iam:ListPolicies
+              - logs:DescribeLogGroups
+              - logs:CreateLogGroup
+              - logs:PutRetentionPolicy
+            Resource:
+              - '*'
+
+          # Note: Permits lambda to put a role permissions boundary on a specific resource
+          - Effect: Allow
+            Action:
+              - iam:PutRolePermissionsBoundary
+            Resource:
+              - !GetAtt VPCFlowLogsRole.Arn
+
+          # Note: Prevents lambda from deleting a role permissions boundary
+          - Effect: Deny
+            Action:
+              - iam:DeleteRolePermissionsBoundary
+            Resource:
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/pb/*'
+
+          # Note: Prevents lambda from removing its role policy
+          - Effect: Deny
+            Action: iam:DetachRolePolicy
+            Resource: "*"
+
+          # Note: Permits lambda to create a role and attach a role policy only if the role has the specified permissions boundary configured.
+          - Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:AttachRolePolicy
+            Resource:
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
+            Condition:
+              StringEquals:
+                iam:PermissionsBoundary:
+                  !Ref LambdaSubRolePermissionsBoundary
+
+  LambdaSubRolePermissionsBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Permissions Boundary Policy - Limits the rights of roles created by the AutoVPCFlow lambda role
+      # Note: CF CAPABILITY_NAMED_IAM needed
+      Path: /pb/
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:DescribeLogGroups
+            - logs:DescribeLogStreams
+            - logs:PutLogEvents
+            - logs:PutRetentionPolicy
+            Resource:
+              - '*'
+
+
+  flowlogsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: The IAM policy used by the IAM role named 'flowlogsRole'
+      # Note: CF CAPABILITY_NAMED_IAM needed
+      Path: /
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:DescribeLogGroups
+            - logs:DescribeLogStreams
+            - logs:PutLogEvents
+            - logs:PutRetentionPolicy
+            Resource:
+              - '*'
+      Roles:
+        - !Ref VPCFlowLogsRole
+    DependsOn: VPCFlowLogsRole
+
+
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: 'Permits VPC Flow Logs to write to CloudWatch Logs'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Principal:
+              Service:
+                - vpc-flow-logs.amazonaws.com
+      Path: /
+      PermissionsBoundary: !Ref LambdaSubRolePermissionsBoundary
+
+
+  LambdaAutoVPCFlowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: 'Creates Lambda role with access to assume the flowlogsRole permissions + basic lambda exec rights'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      PermissionsBoundary: !Ref LambdaPermissionsBoundary
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: lambda-AutoVpcFlow-permissions
+        PolicyDocument:
+          Statement:
+
+          - Effect: Allow
+            Action:
+              - iam:PassRole
+            Resource:
+              - !GetAtt VPCFlowLogsRole.Arn
+
+          - Effect: Allow
+            Action:
+              - organizations:DescribeOrganization
+              - ec2:DescribeRegions
+              - ec2:DescribeVpcs
+              - ec2:CreateFlowLogs
+              - iam:ListRoles
+              - iam:ListPolicies
+              - logs:DescribeLogGroups
+              - logs:CreateLogGroup
+              - logs:PutRetentionPolicy
+            Resource:
+              - '*'
+
+          - Effect: Allow
+            Action:
+              - iam:CreatePolicy
+              - iam:CreateRole
+              - iam:PutRolePermissionsBoundary
+              - iam:AttachRolePolicy
+            Resource:
+              - '*'
+
+          - Effect: Allow
+            Action:
+              - iam:DeleteRolePermissionsBoundary
+              - iam:DetachRolePolicy
+            Resource:
+              - '*'
+
+
+  AutoVpcFlowLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import os
+          from botocore.exceptions import ClientError
+          def get_orgid():
+              org = boto3.client('organizations').describe_organization()
+              return org['Organization']['Id']
+          def enumRegions():
+              ec2_client = boto3.client("ec2")
+              regions = [region['RegionName'] for region in ec2_client.describe_regions()['Regions']]
+              return regions
+          def get_all_vpcs(ec2):
+              return [vpc.id for vpc in list(ec2.vpcs.all())]
+          def get_flow_log_group(log_client,pattern="VPCFlowLogs", retention_period=365):
+              for log_group in log_client.describe_log_groups(logGroupNamePrefix=pattern)["logGroups"]:
+                  if pattern in log_group["logGroupName"]:
+                      print(f"Found existing group {log_group['logGroupName']}")
+                      return log_group["logGroupName"]
+              else:
+                  # Create new log group, if no existing groups
+                  print("Log group not found. Creating new one!")
+                  log_client.create_log_group(
+                      logGroupName=f"{pattern}"
+                  )
+                  log_group_name = log_client.describe_log_groups(
+                      logGroupNamePrefix=pattern
+                  )["logGroups"][0]["logGroupName"]
+                  log_client.put_retention_policy(
+                      logGroupName=log_group_name, retentionInDays=retention_period
+                  )
+                  print(f"New log group is created - {log_group_name}")
+                  return log_group_name
+
+          # Attempts to enables VPC Flow Logs in the identified region
+          def enable_flow_logs(ec2_client,vpc_id, flow_logs_role_arn, log_group):
+              try:
+                  print(
+                      f"Trying to enable flow logs for {vpc_id},"
+                      f" using {log_group} log group and role {flow_logs_role_arn}"
+                  )
+                  ec2_client.create_flow_logs(
+                      DeliverLogsPermissionArn=flow_logs_role_arn,
+                      LogGroupName=log_group,
+                      ResourceIds=[vpc_id],
+                      ResourceType="VPC",
+                      TrafficType="ALL",
+                      LogDestinationType="cloud-watch-logs",
+                  )
+              except ClientError as e:
+                  if e.response["Error"]["Code"] == "FlowLogAlreadyExists":
+                      print(f"Flow logs is already enabled for {vpc_id}\n")
+              else:
+                  print(f"Flow logs is successfully enabled for {vpc_id}\n")
+
+          def lambda_handler(event, context):
+              accountid = boto3.client('sts').get_caller_identity().get('Account')
+              orginfo = get_orgid()
+              regions = enumRegions()
+              for x in regions:
+                  os.environ["AWS_DEFAULT_REGION"] = x
+                  print('Running on region:' + os.environ["AWS_DEFAULT_REGION"])
+                  ec2 = boto3.resource("ec2")
+                  ec2_client = boto3.client("ec2")
+                  log_client = boto3.client("logs")
+                  role_arn = os.environ["IAMROLE"]
+                  vpcs = get_all_vpcs(ec2)
+                  for vpc in vpcs:
+                      pattern = "/AWSLogs/{}/{}/{}/{}".format(orginfo,accountid,x,vpc)
+                      log_group = get_flow_log_group(log_client,pattern=pattern)
+                      enable_flow_logs(ec2_client, vpc, role_arn, log_group)
+                      print('Script completed on region: ' + x)
+
+      Description: 'This script periodically runs and configures VPC Flow Logs on all
+                  regions that do not currently have it setup.'
+      MemorySize: 128
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaAutoVPCFlowRole.Arn
+      # Note.Role: Other Options => Fn::ImportValue: AutoVPCFlowRoleARN
+      Timeout: 120
+      Runtime: python3.7
+      Environment:
+        Variables:
+          IAMROLE: !GetAtt VPCFlowLogsRole.Arn
+  InvokeLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      FunctionName:  !GetAtt AutoVpcFlowLambda.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt MyEventsRule.Arn
+  MyEventsRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Name: 'AutoVPCFlow-Trigger'
+      Description: 'Executes the AutoVPCFlow lambda on a defined schedule.'
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt AutoVpcFlowLambda.Arn
+          Id: !Ref AutoVpcFlowLambda
