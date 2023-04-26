@@ -334,7 +334,7 @@ data "aws_iam_policy_document" "log_destination_policy" {
     ]
 
     resources = [
-      "aws_cloudwatch_log_destination.uswest2.arn"
+      "${aws_cloudwatch_log_destination.uswest2.arn}"
     ]
   }
 }
@@ -363,6 +363,29 @@ data "aws_iam_policy_document" "s3_bucket_policy" {
       "${aws_s3_bucket.bucket.arn}/*"
     ]
   }
+
+  statement {
+    sid = "FirehoseDeliveryStreamWriteForS3"
+    principals {
+      type        = "Service"
+      identifiers = ["firehose.amazonaws.com"]
+    }
+    actions = [
+      "s3:AbortMultipartUpload",
+      "s3:GetBucketLocation",
+      "s3:GetObject",
+      "s3:ListBucket",
+      "s3:ListBucketMultipartUploads",
+      "s3:PutObject",
+      "s3:PutObjectAcl"
+    ]
+    effect = "Allow"
+    resources = [
+      "${aws_s3_bucket.bucket.arn}",
+      "${aws_s3_bucket.bucket.arn}/*"
+    ]
+  }
+
   statement {
     sid = "FirehoseDeliveryStreamWrite For S3"
     principals {
